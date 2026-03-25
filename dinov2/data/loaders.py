@@ -11,7 +11,8 @@ import torch
 from torch.utils.data import Sampler
 
 from .datasets import (
-    HemaStandardDataset
+    HemaStandardDataset,
+    WebShardDataset,
 )
 from .samplers import EpochSampler, InfiniteSampler, ShardedInfiniteSampler
 
@@ -33,13 +34,15 @@ def _parse_dataset_str(dataset_str: str):
 
     for token in tokens[1:]:
         key, value = token.split("=")
-        assert key in ("root", "extra", "split", "shuffle")
+        assert key in ("root", "extra", "split", "shuffle", "image_ext")
         if key == "shuffle":
             value = bool(int(value))
         kwargs[key] = value
 
     if name == "HemaStandardDataset":
         class_ = HemaStandardDataset
+    elif name == "WebShardDataset":
+        class_ = WebShardDataset
     else:
         raise ValueError(f'Unsupported dataset "{name}"')
 
