@@ -88,6 +88,38 @@ def get_downloaded_dino_vit_interpolated(modelname="dinov2_vits14"):
     return model
 
 
+def _extract_backbone_state_dict(checkpoint):
+    """Normalize supported checkpoint formats to a backbone-only state_dict."""
+    candidate = checkpoint
+    for top_key in ("model", "teacher", "state_dict"):
+        if isinstance(checkpoint, dict) and top_key in checkpoint and isinstance(checkpoint[top_key], dict):
+            candidate = checkpoint[top_key]
+            break
+
+    if not isinstance(candidate, dict):
+        raise ValueError("Unsupported checkpoint format: expected dict-like checkpoint weights")
+
+    backbone_state = {}
+    for key, value in candidate.items():
+        if key.startswith("student.backbone."):
+            backbone_state[key.replace("student.backbone.", "", 1)] = value
+        elif key.startswith("teacher.backbone."):
+            backbone_state[key.replace("teacher.backbone.", "", 1)] = value
+        elif key.startswith("backbone."):
+            backbone_state[key.replace("backbone.", "", 1)] = value
+        elif key.startswith("module.backbone."):
+            backbone_state[key.replace("module.backbone.", "", 1)] = value
+        elif "." not in key:
+            # Already a plain backbone key (e.g., pos_embed, cls_token, blocks.0.norm1.weight)
+            backbone_state[key] = value
+
+    if not backbone_state:
+        # Fallback: treat candidate as a plain backbone state_dict.
+        backbone_state = candidate
+
+    return backbone_state
+
+
 class SSLMetaArch(nn.Module):
     def __init__(self, cfg):
         super().__init__()
@@ -112,7 +144,12 @@ class SSLMetaArch(nn.Module):
         if cfg.student.pretrained_weights:
             chkpt = torch.load(cfg.student.pretrained_weights)
             logger.info(f"OPTIONS -- pretrained weights: loading from {cfg.student.pretrained_weights}")
-            student_backbone.load_state_dict(chkpt["model"], strict=False)
+            backbone_state = _extract_backbone_state_dict(chkpt)
+            missing_keys, unexpected_keys = student_backbone.load_state_dict(backbone_state, strict=False)
+            logger.info(
+                "OPTIONS -- pretrained weights loaded with strict=False "
+                f"(missing={len(missing_keys)}, unexpected={len(unexpected_keys)})"
+            )
 
         self.embed_dim = embed_dim
         self.dino_out_dim = cfg.dino.head_n_prototypes
