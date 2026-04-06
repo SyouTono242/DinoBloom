@@ -142,7 +142,7 @@ class SSLMetaArch(nn.Module):
         logger.info(f"OPTIONS -- architecture : embed_dim: {embed_dim}")
 
         if cfg.student.pretrained_weights:
-            chkpt = torch.load(cfg.student.pretrained_weights)
+            chkpt = torch.load(cfg.student.pretrained_weights, map_location="cpu", weights_only=False)
             logger.info(f"OPTIONS -- pretrained weights: loading from {cfg.student.pretrained_weights}")
             backbone_state = _extract_backbone_state_dict(chkpt)
             missing_keys, unexpected_keys = student_backbone.load_state_dict(backbone_state, strict=False)
@@ -459,9 +459,16 @@ class SSLMetaArch(nn.Module):
     def fsdp_synchronize_streams(self):
         if self.need_to_synchronize_fsdp_streams:
             torch.cuda.synchronize()
-            self.student.dino_head._streams = (
-                self.teacher.dino_head._streams
-            ) = self.student.backbone._streams = self.teacher.backbone._streams
+            stream_refs = [
+                self.student.dino_head,
+                self.teacher.dino_head,
+                self.student.backbone,
+                self.teacher.backbone,
+            ]
+            if all(hasattr(module, "_streams") for module in stream_refs):
+                self.student.dino_head._streams = (
+                    self.teacher.dino_head._streams
+                ) = self.student.backbone._streams = self.teacher.backbone._streams
             self.need_to_synchronize_fsdp_streams = False
 
     def update_teacher(self, m):

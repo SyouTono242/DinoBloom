@@ -12,9 +12,13 @@ import torch
 from fvcore.common.checkpoint import Checkpointer
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.distributed.fsdp import MixedPrecision, ShardingStrategy, StateDictType
-from torch.distributed.fsdp._runtime_utils import _reshard
 from torch.distributed.fsdp.sharded_grad_scaler import ShardedGradScaler
 from torch.distributed.fsdp.wrap import ModuleWrapPolicy
+
+try:
+    from torch.distributed.fsdp._runtime_utils import _reshard
+except ImportError:
+    _reshard = None
 
 
 def get_fsdp_wrapper(model_cfg, modules_to_wrap=set()):
@@ -62,9 +66,10 @@ def is_sharded_fsdp(x):
 
 def free_if_fsdp(x):
     if is_sharded_fsdp(x):
-        handles = x._handles
-        true_list = [True for h in handles]
-        _reshard(x, handles, true_list)
+        handles = getattr(x, "_handles", None)
+        if _reshard is not None and handles is not None:
+            true_list = [True for h in handles]
+            _reshard(x, handles, true_list)
 
 
 def get_fsdp_modules(x):
