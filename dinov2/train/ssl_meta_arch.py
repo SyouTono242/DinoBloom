@@ -20,7 +20,7 @@ from torch import nn
 try:
     from xformers.ops import fmha
 except ImportError:
-    raise AssertionError("xFormers is required for training")
+    fmha = None
 
 
 logger = logging.getLogger("dinov2")
@@ -53,6 +53,18 @@ def smooth_rank_loss(embedding_matrix, eps=1e-7):
 
     # Return the negative entropy as the loss
     return neg_entropy
+
+
+def _run_dino_head_packed(head, tensor_list):
+    if fmha is not None:
+        attn_bias, cat_inputs = fmha.BlockDiagonalMask.from_tensor_list(tensor_list)
+        return list(attn_bias.split(head(cat_inputs)))
+
+    lengths = [tensor.shape[1] for tensor in tensor_list]
+    cat_inputs = torch.cat(tensor_list, dim=1)
+    return list(torch.split(head(cat_inputs), lengths, dim=1))
+
+
 def _extract_backbone_state_dict(checkpoint):
     """Normalize supported checkpoint formats to a backbone-only state_dict."""
     candidate = checkpoint
@@ -328,8 +340,7 @@ class SSLMetaArch(nn.Module):
                 ]
 
         # 2: run
-        _attn_bias, cat_inputs = fmha.BlockDiagonalMask.from_tensor_list(inputs_for_student_head_list)
-        outputs_list = _attn_bias.split(self.student.dino_head(cat_inputs))
+        outputs_list = _run_dino_head_packed(self.student.dino_head, inputs_for_student_head_list)
 
         # 3a: local crops cls tokens
         student_local_cls_tokens_after_head = outputs_list.pop(0).squeeze(0)
