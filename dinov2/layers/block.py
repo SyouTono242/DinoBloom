@@ -226,6 +226,9 @@ def drop_add_residual_stochastic_depth_list(
 
 
 class NestedTensorBlock(Block):
+    def forward_list(self, x_list: List[Tensor]) -> List[Tensor]:
+        return [super(NestedTensorBlock, self).forward(x) for x in x_list]
+
     def forward_nested(self, x_list: List[Tensor]) -> List[Tensor]:
         """
         x_list contains a list of tensors to nest together and run
@@ -271,7 +274,7 @@ class NestedTensorBlock(Block):
             return super().forward(x_or_x_list)
         elif isinstance(x_or_x_list, list):
             if not XFORMERS_AVAILABLE:
-                raise AssertionError("xFormers is required for using nested tensors")
+                return self.forward_list(x_or_x_list)
             return self.forward_nested(x_or_x_list)
         else:
             raise AssertionError
