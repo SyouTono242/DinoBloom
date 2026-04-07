@@ -7,6 +7,7 @@ import logging
 import os
 import random
 import subprocess
+import inspect
 from urllib.parse import urlparse
 
 import numpy as np
@@ -14,6 +15,19 @@ import torch
 from torch import nn
 
 logger = logging.getLogger("dinov2")
+
+
+def torch_load_compat(path, map_location=None):
+    kwargs = {}
+    if map_location is not None:
+        kwargs["map_location"] = map_location
+
+    # torch 2.6 changed torch.load() to default to weights_only=True.
+    # Older versions such as torch 2.0.x do not accept this kwarg.
+    if "weights_only" in inspect.signature(torch.load).parameters:
+        kwargs["weights_only"] = False
+
+    return torch.load(path, **kwargs)
 
 
 def smooth_rank_measure(embedding_matrix, eps=1e-7):
@@ -44,7 +58,7 @@ def load_pretrained_weights(model, pretrained_weights, checkpoint_key):
     if urlparse(pretrained_weights).scheme:  # If it looks like an URL
         state_dict = torch.hub.load_state_dict_from_url(pretrained_weights, map_location="cpu")
     else:
-        state_dict = torch.load(pretrained_weights, map_location="cpu", weights_only=False)
+        state_dict = torch_load_compat(pretrained_weights, map_location="cpu")
     if checkpoint_key is not None and checkpoint_key in state_dict:
         logger.info(f"Take key {checkpoint_key} in provided checkpoint dict")
         state_dict = state_dict[checkpoint_key]

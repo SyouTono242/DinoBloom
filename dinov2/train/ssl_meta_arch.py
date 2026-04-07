@@ -15,7 +15,7 @@ from dinov2.models import build_model_from_cfg
 
 from dinov2.models.vision_transformer import BlockChunk
 from dinov2.utils.param_groups import fuse_params_groups, get_params_groups_with_decay
-from dinov2.utils.utils import has_batchnorms
+from dinov2.utils.utils import has_batchnorms, torch_load_compat
 from torch import nn
 
 try:
@@ -142,7 +142,7 @@ class SSLMetaArch(nn.Module):
         logger.info(f"OPTIONS -- architecture : embed_dim: {embed_dim}")
 
         if cfg.student.pretrained_weights:
-            chkpt = torch.load(cfg.student.pretrained_weights, map_location="cpu", weights_only=False)
+            chkpt = torch_load_compat(cfg.student.pretrained_weights, map_location="cpu")
             logger.info(f"OPTIONS -- pretrained weights: loading from {cfg.student.pretrained_weights}")
             backbone_state = _extract_backbone_state_dict(chkpt)
             missing_keys, unexpected_keys = student_backbone.load_state_dict(backbone_state, strict=False)

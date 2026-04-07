@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from dinov2.utils.utils import torch_load_compat
 from models.ctran import ctranspath
 from models.resnet_retccl import resnet50 as retccl_res50
 from torchvision import transforms
@@ -42,7 +43,7 @@ def get_models(modelname, saved_model_path=None):
 
 def get_retCCL(model_path):
     model = retccl_res50(num_classes=128, mlp=False, two_branch=False, normlinear=True)
-    pretext_model = torch.load(model_path, map_location=torch.device("cpu"), weights_only=False)
+    pretext_model = torch_load_compat(model_path, map_location=torch.device("cpu"))
     model.fc = nn.Identity()
     model.load_state_dict(pretext_model, strict=True)
     return model
@@ -55,7 +56,7 @@ def get_dino_finetuned_downloaded(model_path, modelname):
 
     # pos_embed has wrong shape
     if model_path is not None:
-        pretrained = torch.load(model_path, map_location=torch.device("cpu"), weights_only=False)
+        pretrained = torch_load_compat(model_path, map_location=torch.device("cpu"))
         # make correct state dict for loading
         new_state_dict = {}
         for key, value in pretrained["teacher"].items():
@@ -81,7 +82,7 @@ def get_dino_finetuned_downloaded(model_path, modelname):
 def get_ctranspath(model_path):
     model = ctranspath()
     model.head = nn.Identity()
-    pretrained = torch.load(model_path, map_location=torch.device("cpu"), weights_only=False)
+    pretrained = torch_load_compat(model_path, map_location=torch.device("cpu"))
     model.load_state_dict(pretrained["model"], strict=True)
     return model
 
