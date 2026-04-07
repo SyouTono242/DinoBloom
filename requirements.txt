@@ -1,9 +1,9 @@
---extra-index-url https://download.pytorch.org/whl/cu124
-torch==2.6.0
-torchvision==0.21.0
+torch==2.0.1
+torchvision==0.15.2
 omegaconf==2.3.0
 fvcore==0.1.5
 iopath==0.1.9
-xformers==0.0.27
+xformers==0.0.22
 submitit==1.5.4
+wandb==0.19.6
 --extra-index-url https://pypi.nvidia.com
