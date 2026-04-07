@@ -4,7 +4,6 @@
 # found in the LICENSE file in the root directory of this source tree.
 
 import logging
-import math
 from functools import partial
 
 import torch
@@ -54,40 +53,6 @@ def smooth_rank_loss(embedding_matrix, eps=1e-7):
 
     # Return the negative entropy as the loss
     return neg_entropy
-
-
-def interpolate_pos_encoding(x, w, h):
-    N = x.shape[1] - 1
-    dim = x.shape[-1]
-    w0 = w / int(math.sqrt(N))
-    h0 = h / int(math.sqrt(N))
-
-    # Interpolate the position embeddings without changing the first row (class token)
-    patch_pos_embed = nn.functional.interpolate(
-        x[:, 1:].reshape(1, int(math.sqrt(N)), int(math.sqrt(N)), dim).permute(0, 3, 1, 2),
-        scale_factor=(w0, h0),
-        mode="bicubic",
-    )
-
-    # assert int(w0) == patch_pos_embed.shape[-2]
-    # assert int(h0) == patch_pos_embed.shape[-1]
-    patch_pos_embed = patch_pos_embed.permute(0, 2, 3, 1).view(1, -1, dim)
-
-    # Concatenate the class token with the interpolated position embeddings
-    return torch.cat((x[:, :1], patch_pos_embed), dim=1)
-
-
-def get_downloaded_dino_vit_interpolated(modelname="dinov2_vits14"):
-
-    model = torch.hub.load("facebookresearch/dinov2", modelname)  #
-    input_tensor = model.pos_embed
-    tensor_corr_shape = interpolate_pos_encoding(input_tensor, 16, 16)
-    pos_embed = nn.Parameter(torch.zeros(1, 257))
-    pos_embed.data = tensor_corr_shape
-    model.pos_embed = pos_embed
-    return model
-
-
 def _extract_backbone_state_dict(checkpoint):
     """Normalize supported checkpoint formats to a backbone-only state_dict."""
     candidate = checkpoint
@@ -129,13 +94,7 @@ class SSLMetaArch(nn.Module):
         student_model_dict = dict()
         teacher_model_dict = dict()
 
-        if cfg.student.arch in ["dinov2_vits14", "dinov2_vitb14", "dinov2_vitl14", "dinov2_vitg14"]:
-            student_backbone = get_downloaded_dino_vit_interpolated(cfg.student.arch)
-            teacher_backbone = get_downloaded_dino_vit_interpolated(cfg.student.arch)
-            embed_dict = {"dinov2_vits14": 384, "dinov2_vitb14": 768, "dinov2_vitl14": 1024, "dinov2_vitg14": 1536}
-            embed_dim = embed_dict[cfg.student.arch]
-        else:
-            student_backbone, teacher_backbone, embed_dim = build_model_from_cfg(cfg)
+        student_backbone, teacher_backbone, embed_dim = build_model_from_cfg(cfg)
 
         student_model_dict["backbone"] = student_backbone
         teacher_model_dict["backbone"] = teacher_backbone

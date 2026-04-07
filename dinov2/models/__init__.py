@@ -9,10 +9,17 @@ from . import vision_transformer as vits
 
 logger = logging.getLogger("dinov2")
 
+_ARCH_ALIASES = {
+    "dinov2_vits14": "vit_small",
+    "dinov2_vitb14": "vit_base",
+    "dinov2_vitl14": "vit_large",
+    "dinov2_vitg14": "vit_giant2",
+}
+
 
 def build_model(args, only_teacher=False, img_size=224):
-    args.arch = args.arch.removesuffix("_memeff")
-    if "vit" in args.arch:
+    arch_name = _ARCH_ALIASES.get(args.arch, args.arch).removesuffix("_memeff")
+    if "vit" in arch_name:
         vit_kwargs = dict(
             img_size=img_size,
             patch_size=args.patch_size,
@@ -26,10 +33,10 @@ def build_model(args, only_teacher=False, img_size=224):
             interpolate_offset=args.interpolate_offset,
             interpolate_antialias=args.interpolate_antialias,
         )
-        teacher = vits.__dict__[args.arch](**vit_kwargs)
+        teacher = vits.__dict__[arch_name](**vit_kwargs)
         if only_teacher:
             return teacher, teacher.embed_dim
-        student = vits.__dict__[args.arch](
+        student = vits.__dict__[arch_name](
             **vit_kwargs,
             drop_path_rate=args.drop_path_rate,
             drop_path_uniform=args.drop_path_uniform,
