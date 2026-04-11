@@ -19,6 +19,7 @@ class WebDataset(IterableDataset):
         transform: Optional[Callable] = None,
         target_transform: Optional[Callable] = None,
         shuffle: bool = False,
+        repeat: bool = False,
         image_ext: str = "png",
     ) -> None:
         super().__init__()
@@ -27,6 +28,7 @@ class WebDataset(IterableDataset):
         self.transform = transform
         self.target_transform = target_transform
         self.shuffle = shuffle
+        self.repeat = repeat
         self.image_ext = image_ext.lstrip(".").lower()
         self.shards = self._resolve_shards(Path(root))
         self.sample_count = self._count_samples(self.shards, self.image_ext)
@@ -128,7 +130,11 @@ class WebDataset(IterableDataset):
         return "unknown_sample"
 
     def __iter__(self):
-        return iter(self._build_pipeline())
+        if self.repeat:
+            while True:
+                yield from self._build_pipeline()
+        else:
+            yield from self._build_pipeline()
 
     def __len__(self) -> int:
         return self.sample_count
