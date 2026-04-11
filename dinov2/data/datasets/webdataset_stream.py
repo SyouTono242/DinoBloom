@@ -78,6 +78,9 @@ class WebDataset(IterableDataset):
         if self.shuffle:
             pipeline = pipeline.shuffle(1000)
 
+        # Training does not use class labels, and our .cls payloads are strings
+        # like "class0" that webdataset otherwise tries to parse as integers.
+        pipeline = pipeline.map(self._drop_unused_fields)
         pipeline = pipeline.decode("pil")
 
         for sample in pipeline:
@@ -94,6 +97,12 @@ class WebDataset(IterableDataset):
                     target = self.target_transform(target)
 
             yield image, target, self._resolve_sample_name(sample)
+
+    @staticmethod
+    def _drop_unused_fields(sample):
+        sample = dict(sample)
+        sample.pop("cls", None)
+        return sample
 
     def _resolve_sample_name(self, sample) -> str:
         metadata = sample.get("json")
