@@ -49,7 +49,7 @@ train:
   batch_size_per_gpu: 120 #vitg 26+, vitl: 56, vits:152, vitb:120 for 8 node
   num_workers: 124
   OFFICIAL_EPOCH_LENGTH: 500  # 1250
-  dataset_path: HemaStandardDataset:root=/lustre/groups/shared/histology_data/patch_lists/hematology_patches:shuffle=1
+  dataset_path: WebDataset:root=${SLURM_TMPDIR}/shards/train:image_ext=png
   centering: sinkhorn_knopp
 
   drop_path_rate: 0.4

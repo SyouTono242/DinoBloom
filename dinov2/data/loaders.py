@@ -9,9 +9,11 @@ from typing import Any, Callable, List, Optional, TypeVar
 
 import torch
 from torch.utils.data import Sampler
+from torch.utils.data import IterableDataset
 
 from .datasets import (
     HemaStandardDataset,
+    WebDataset,
     WebShardDataset,
 )
 from .samplers import EpochSampler, InfiniteSampler, ShardedInfiniteSampler
@@ -41,6 +43,8 @@ def _parse_dataset_str(dataset_str: str):
 
     if name == "HemaStandardDataset":
         class_ = HemaStandardDataset
+    elif name == "WebDataset":
+        class_ = WebDataset
     elif name == "WebShardDataset":
         class_ = WebShardDataset
     else:
@@ -71,7 +75,10 @@ def make_dataset(
     class_, kwargs = _parse_dataset_str(dataset_str)
     dataset = class_(transform=transform, target_transform=target_transform, **kwargs)
 
-    logger.info(f"# of dataset samples: {len(dataset):,d}")
+    try:
+        logger.info(f"# of dataset samples: {len(dataset):,d}")
+    except TypeError:
+        logger.info("dataset length unavailable")
 
     # Aggregated datasets do not expose (yet) these attributes, so add them.
     if not hasattr(dataset, "transform"):
@@ -179,14 +186,18 @@ def make_data_loader(
         collate_fn: Function that performs batch collation
     """
 
-    sampler = _make_sampler(
-        dataset=dataset,
-        type=sampler_type,
-        shuffle=shuffle,
-        seed=seed,
-        size=sampler_size,
-        advance=sampler_advance,
-    )
+    if isinstance(dataset, IterableDataset):
+        sampler = None
+        logger.info("dataset is iterable; skipping sampler construction")
+    else:
+        sampler = _make_sampler(
+            dataset=dataset,
+            type=sampler_type,
+            shuffle=shuffle,
+            seed=seed,
+            size=sampler_size,
+            advance=sampler_advance,
+        )
 
     logger.info("using PyTorch data loader")
     data_loader = torch.utils.data.DataLoader(
@@ -196,7 +207,7 @@ def make_data_loader(
         num_workers=num_workers,
         pin_memory=True,
         drop_last=drop_last,
-        persistent_workers=persistent_workers,
+        persistent_workers=persistent_workers and num_workers > 0,
         collate_fn=collate_fn,
     )
 
