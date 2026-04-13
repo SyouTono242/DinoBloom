@@ -118,6 +118,16 @@ class FSDPCheckpointer(Checkpointer):
         with FSDP.state_dict_type(self.model, StateDictType.FULL_STATE_DICT):  # LOCAL_STATE_DICT
             return super().load(*args, **kwargs)
 
+    def _load_file(self, filename: str):
+        # PyTorch 2.6 changed torch.load to default to weights_only=True, which
+        # breaks resume for our trusted training checkpoints because they contain
+        # optimizer/scaler state and other pickled metadata.
+        if filename.endswith(".pkl"):
+            return super()._load_file(filename)
+
+        with self.path_manager.open(filename, "rb") as f:
+            return torch.load(f, map_location=torch.device("cpu"), weights_only=False)
+
     def has_checkpoint(self) -> bool:
         """
         Returns:
