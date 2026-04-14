@@ -5,4 +5,3 @@
 
 from .hema_data import HemaStandardDataset
 from .webdataset_stream import WebDataset
-from .webdataset_tar import WebShardDataset

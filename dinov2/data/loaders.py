@@ -14,7 +14,6 @@ from torch.utils.data import IterableDataset
 from .datasets import (
     HemaStandardDataset,
     WebDataset,
-    WebShardDataset,
 )
 from .samplers import EpochSampler, InfiniteSampler, ShardedInfiniteSampler
 
@@ -45,8 +44,6 @@ def _parse_dataset_str(dataset_str: str):
         class_ = HemaStandardDataset
     elif name == "WebDataset":
         class_ = WebDataset
-    elif name == "WebShardDataset":
-        class_ = WebShardDataset
     else:
         raise ValueError(f'Unsupported dataset "{name}"')
 
