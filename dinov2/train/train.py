@@ -166,12 +166,15 @@ def do_train(cfg, model, resume=False):
 
     OFFICIAL_EPOCH_LENGTH = cfg.train.OFFICIAL_EPOCH_LENGTH
     max_iter = cfg.optim.epochs * OFFICIAL_EPOCH_LENGTH
+    checkpoint_period_epochs = max(int(cfg.train.checkpoint_period_epochs), 1)
+    checkpoint_period = checkpoint_period_epochs * OFFICIAL_EPOCH_LENGTH
+    checkpoint_max_to_keep = max(int(cfg.train.checkpoint_max_to_keep), 1)
 
     periodic_checkpointer = PeriodicCheckpointer(
         checkpointer,
-        period=OFFICIAL_EPOCH_LENGTH,
+        period=checkpoint_period,
         max_iter=max_iter,
-        max_to_keep=5,
+        max_to_keep=checkpoint_max_to_keep,
     )
 
     # setup data preprocessing

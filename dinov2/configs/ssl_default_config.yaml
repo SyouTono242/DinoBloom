@@ -63,6 +63,8 @@ train:
   dataset_path: ImageNet:split=TRAIN
   output_dir: .
   saveckp_freq: 20
+  checkpoint_period_epochs: 1
+  checkpoint_max_to_keep: 5
   seed: 0
   num_workers: 10
   OFFICIAL_EPOCH_LENGTH: 1250
