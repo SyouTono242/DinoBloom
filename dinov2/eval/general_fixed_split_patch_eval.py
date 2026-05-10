@@ -108,6 +108,9 @@ parser.add_argument(
     default=True,
     type=bool,
 )
+parser.add_argument("--image_mode", default="rgb", type=str, help="rgb or grayscale")
+parser.add_argument("--normalize_mean", nargs="+", type=float, default=None, help="normalization mean values")
+parser.add_argument("--normalize_std", nargs="+", type=float, default=None, help="normalization std values")
 
 
 def save_features_and_labels_individual(feature_extractor, dataloader, save_dir, dataset):
@@ -153,12 +156,17 @@ def main(args):
     df = pd.read_csv(image_paths)
     df_test = pd.read_csv(image_test_paths)
 
-    transform = get_transforms(model_name)
+    transform = get_transforms(
+        model_name,
+        image_mode=args.image_mode,
+        normalize_mean=args.normalize_mean,
+        normalize_std=args.normalize_std,
+    )
 
     # make sure encoding is always the same
 
-    train_dataset = CustomImageDataset(df, transform=transform)
-    test_dataset = CustomImageDataset(df_test, transform=transform)
+    train_dataset = CustomImageDataset(df, transform=transform, image_mode=args.image_mode)
+    test_dataset = CustomImageDataset(df_test, transform=transform, image_mode=args.image_mode)
 
     # Create data loaders for the  datasets
     train_dataloader = DataLoader(

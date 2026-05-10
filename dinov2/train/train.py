@@ -18,6 +18,7 @@ import wandb
 from dinov2.data import (
     DataAugmentationDINO,
     DataAugmentationHEMA,
+    DataAugmentationMicroscopyGray,
     MaskingGenerator,
     SamplerType,
     collate_data_and_cast,
@@ -33,6 +34,12 @@ from fvcore.common.checkpoint import PeriodicCheckpointer
 
 torch.backends.cuda.matmul.allow_tf32 = True  # PyTorch 1.12 sets this to False by default
 logger = logging.getLogger("dinov2")
+
+
+def _cfg_normalization_stats(cfg):
+    mean = tuple(cfg.normalization.mean)
+    std = tuple(cfg.normalization.std)
+    return mean, std
 
 
 def get_args_parser(add_help: bool = True):
@@ -186,6 +193,7 @@ def do_train(cfg, model, resume=False):
         input_size=(img_size // patch_size, img_size // patch_size),
         max_num_patches=0.5 * img_size // patch_size * img_size // patch_size,
     )
+    normalize_mean, normalize_std = _cfg_normalization_stats(cfg)
     if cfg.data_transform == "default":
         data_transform = DataAugmentationDINO(
             cfg.crops.global_crops_scale,
@@ -193,6 +201,8 @@ def do_train(cfg, model, resume=False):
             cfg.crops.local_crops_number,
             global_crops_size=cfg.crops.global_crops_size,
             local_crops_size=cfg.crops.local_crops_size,
+            normalize_mean=normalize_mean,
+            normalize_std=normalize_std,
         )
     elif cfg.data_transform == "hema":
         data_transform = DataAugmentationHEMA(
@@ -201,7 +211,21 @@ def do_train(cfg, model, resume=False):
             cfg.crops.local_crops_number,
             global_crops_size=cfg.crops.global_crops_size,
             local_crops_size=cfg.crops.local_crops_size,
+            normalize_mean=normalize_mean,
+            normalize_std=normalize_std,
         )
+    elif cfg.data_transform == "microscopy_gray":
+        data_transform = DataAugmentationMicroscopyGray(
+            cfg.crops.global_crops_scale,
+            cfg.crops.local_crops_scale,
+            cfg.crops.local_crops_number,
+            global_crops_size=cfg.crops.global_crops_size,
+            local_crops_size=cfg.crops.local_crops_size,
+            normalize_mean=normalize_mean,
+            normalize_std=normalize_std,
+        )
+    else:
+        raise ValueError(f"Unsupported data_transform: {cfg.data_transform}")
 
     collate_fn = partial(
         collate_data_and_cast,

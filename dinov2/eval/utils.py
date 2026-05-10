@@ -56,9 +56,10 @@ def create_label_mapping_from_paths(image_paths):
 
 
 class CustomImageDataset(Dataset):
-    def __init__(self, df, transform):
+    def __init__(self, df, transform, image_mode="rgb"):
         self.df = df
         self.transform = transform
+        self.image_mode = image_mode.lower()
         self.class_to_label = create_label_mapping(df)
         print(self.class_to_label)
 
@@ -68,7 +69,8 @@ class CustomImageDataset(Dataset):
     def __getitem__(self, idx):
         image_path, label = self.df.iloc[idx]
         try:
-            image = Image.open(image_path).convert("RGB")
+            pil_mode = "L" if self.image_mode in {"gray", "grayscale", "l"} else "RGB"
+            image = Image.open(image_path).convert(pil_mode)
         except Exception as e:
             print(e)
             print(image_path)
@@ -83,9 +85,18 @@ class CustomImageDataset(Dataset):
 
 
 class PathImageDataset(Dataset):
-    def __init__(self, image_path, transform, class_to_label=None, filetype=".tiff", img_size=(224, 224)):
+    def __init__(
+        self,
+        image_path,
+        transform,
+        class_to_label=None,
+        filetype=".tiff",
+        img_size=(224, 224),
+        image_mode="rgb",
+    ):
         self.images = list(Path(image_path).rglob("*" + filetype))
         self.transform = transform
+        self.image_mode = image_mode.lower()
 
         if class_to_label is None:
             class_to_label = create_label_mapping_from_paths(self.images)
@@ -102,7 +113,8 @@ class PathImageDataset(Dataset):
         try:
 
             label = Path(image_path).parent.name
-            image = Image.open(image_path).convert("RGB").resize(self.img_size)
+            pil_mode = "L" if self.image_mode in {"gray", "grayscale", "l"} else "RGB"
+            image = Image.open(image_path).convert(pil_mode).resize(self.img_size)
 
             if self.transform:
                 image = self.transform(image)

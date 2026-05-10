@@ -7,9 +7,10 @@ import logging
 import random
 
 import numpy as np
+from PIL import Image
 from torchvision import transforms
 
-from .transforms import GaussianBlur, make_normalize_transform
+from .transforms import EnsureThreeChannels, GaussianBlur, GaussianNoise, make_normalize_transform
 
 logger = logging.getLogger("dinov2")
 
@@ -22,6 +23,8 @@ class DataAugmentationDINO(object):
         local_crops_number,
         global_crops_size=224,
         local_crops_size=96,
+        normalize_mean=(0.485, 0.456, 0.406),
+        normalize_std=(0.229, 0.224, 0.225),
     ):
         self.global_crops_scale = global_crops_scale
         self.local_crops_scale = local_crops_scale
@@ -96,7 +99,8 @@ class DataAugmentationDINO(object):
         self.normalize = transforms.Compose(
             [
                 transforms.ToTensor(),
-                make_normalize_transform(),
+                EnsureThreeChannels(),
+                make_normalize_transform(mean=normalize_mean, std=normalize_std),
             ]
         )
 
@@ -137,6 +141,8 @@ class DataAugmentationHEMA(object):
         local_crops_number,
         global_crops_size=224,
         local_crops_size=96,
+        normalize_mean=(0.485, 0.456, 0.406),
+        normalize_std=(0.229, 0.224, 0.225),
     ):
         self.global_crops_scale = global_crops_scale
         self.local_crops_scale = local_crops_scale
@@ -220,7 +226,8 @@ class DataAugmentationHEMA(object):
         self.normalize = transforms.Compose(
             [
                 transforms.ToTensor(),
-                make_normalize_transform(),
+                EnsureThreeChannels(),
+                make_normalize_transform(mean=normalize_mean, std=normalize_std),
             ]
         )
 
@@ -250,4 +257,111 @@ class DataAugmentationHEMA(object):
         output["local_crops"] = local_crops
         output["offsets"] = ()
 
+        return output
+
+
+class DataAugmentationMicroscopyGray(object):
+    def __init__(
+        self,
+        global_crops_scale,
+        local_crops_scale,
+        local_crops_number,
+        global_crops_size=224,
+        local_crops_size=96,
+        normalize_mean=(0.5,),
+        normalize_std=(0.25,),
+    ):
+        self.local_crops_number = local_crops_number
+
+        logger.info("###################################")
+        logger.info("Using grayscale microscopy augmentation parameters:")
+        logger.info(f"global_crops_scale: {global_crops_scale}")
+        logger.info(f"local_crops_scale: {local_crops_scale}")
+        logger.info(f"local_crops_number: {local_crops_number}")
+        logger.info(f"global_crops_size: {global_crops_size}")
+        logger.info(f"local_crops_size: {local_crops_size}")
+        logger.info(f"normalize_mean: {normalize_mean}")
+        logger.info(f"normalize_std: {normalize_std}")
+        logger.info("###################################")
+
+        self.geometric_augmentation_global = transforms.Compose(
+            [
+                transforms.RandomResizedCrop(
+                    global_crops_size, scale=global_crops_scale, interpolation=transforms.InterpolationMode.BICUBIC
+                ),
+                transforms.RandomHorizontalFlip(p=0.5),
+                transforms.RandomVerticalFlip(p=0.5),
+                transforms.RandomApply(
+                    [
+                        transforms.RandomRotation(
+                            degrees=(-180, 180),
+                            interpolation=transforms.InterpolationMode.BICUBIC,
+                            fill=0,
+                        )
+                    ],
+                    p=0.5,
+                ),
+            ]
+        )
+
+        self.geometric_augmentation_local = transforms.Compose(
+            [
+                transforms.RandomResizedCrop(
+                    local_crops_size, scale=local_crops_scale, interpolation=transforms.InterpolationMode.BICUBIC
+                ),
+                transforms.RandomHorizontalFlip(p=0.5),
+                transforms.RandomVerticalFlip(p=0.5),
+                transforms.RandomApply(
+                    [
+                        transforms.RandomRotation(
+                            degrees=(-180, 180),
+                            interpolation=transforms.InterpolationMode.BICUBIC,
+                            fill=0,
+                        )
+                    ],
+                    p=0.5,
+                ),
+            ]
+        )
+
+        intensity_jitter = transforms.RandomApply(
+            [transforms.ColorJitter(brightness=0.25, contrast=0.25)],
+            p=0.8,
+        )
+
+        self.normalize = transforms.Compose(
+            [
+                transforms.ToTensor(),
+                GaussianNoise(p=0.5, sigma_min=0.003, sigma_max=0.02),
+                EnsureThreeChannels(),
+                make_normalize_transform(mean=normalize_mean, std=normalize_std),
+            ]
+        )
+
+        self.global_transfo1 = transforms.Compose([intensity_jitter, GaussianBlur(p=1.0), self.normalize])
+        self.global_transfo2 = transforms.Compose([intensity_jitter, GaussianBlur(p=0.3), self.normalize])
+        self.local_transfo = transforms.Compose([intensity_jitter, GaussianBlur(p=0.5), self.normalize])
+
+    @staticmethod
+    def _ensure_grayscale(image):
+        if isinstance(image, Image.Image):
+            return image.convert("L")
+        return image
+
+    def __call__(self, image):
+        image = self._ensure_grayscale(image)
+        output = {}
+
+        im1_base = self.geometric_augmentation_global(image)
+        global_crop_1 = self.global_transfo1(im1_base)
+
+        im2_base = self.geometric_augmentation_global(image)
+        global_crop_2 = self.global_transfo2(im2_base)
+
+        output["global_crops"] = [global_crop_1, global_crop_2]
+        output["global_crops_teacher"] = [global_crop_1, global_crop_2]
+        output["local_crops"] = [
+            self.local_transfo(self.geometric_augmentation_local(image)) for _ in range(self.local_crops_number)
+        ]
+        output["offsets"] = ()
         return output

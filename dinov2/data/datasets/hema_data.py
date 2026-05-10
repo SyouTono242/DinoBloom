@@ -23,9 +23,11 @@ class HemaStandardDataset(VisionDataset):
         transform: Optional[Callable] = None,
         target_transform: Optional[Callable] = None,
         shuffle: bool = False,
+        image_mode: str = "rgb",
     ) -> None:
         super().__init__(root, transforms, transform, target_transform)
         self.patches = []
+        self.image_mode = image_mode.lower()
 
         all_dataset_files = Path(root).glob("*.txt")
 
@@ -58,7 +60,8 @@ class HemaStandardDataset(VisionDataset):
         # Load image from jpeg file
         adjusted_index = index % self.true_len
         filepath = self.patches[adjusted_index]
-        patch = Image.open(filepath).convert(mode="RGB").resize((dimension, dimension), Image.Resampling.LANCZOS)
+        pil_mode = "L" if self.image_mode in {"gray", "grayscale", "l"} else "RGB"
+        patch = Image.open(filepath).convert(mode=pil_mode).resize((dimension, dimension), Image.Resampling.LANCZOS)
         return patch, filepath
 
     def get_target(self, index: int) -> torch.Tensor:

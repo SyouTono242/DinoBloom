@@ -21,6 +21,7 @@ class WebDataset(IterableDataset):
         shuffle: bool = False,
         repeat: bool = False,
         image_ext: str = "png",
+        image_mode: str = "rgb",
     ) -> None:
         super().__init__()
         self.root = root
@@ -30,6 +31,7 @@ class WebDataset(IterableDataset):
         self.shuffle = shuffle
         self.repeat = repeat
         self.image_ext = image_ext.lstrip(".").lower()
+        self.image_mode = image_mode.lower()
         self.shards = self._resolve_shards(Path(root))
         self.sample_count = self._count_samples(self.shards, self.image_ext)
 
@@ -89,6 +91,10 @@ class WebDataset(IterableDataset):
             image = sample.get(self.image_ext)
             if image is None:
                 continue
+            if self.image_mode in {"gray", "grayscale", "l"}:
+                image = image.convert("L")
+            else:
+                image = image.convert("RGB")
 
             target = torch.zeros((1,))
             if self.transforms is not None:

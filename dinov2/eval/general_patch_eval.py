@@ -112,6 +112,9 @@ parser.add_argument(
     default="dino_eval",
     type=str,
 )
+parser.add_argument("--image_mode", default="rgb", type=str, help="rgb or grayscale")
+parser.add_argument("--normalize_mean", nargs="+", type=float, default=None, help="normalization mean values")
+parser.add_argument("--normalize_std", nargs="+", type=float, default=None, help="normalization std values")
 
 
 def save_features_and_labels(feature_extractor, dataloader, save_dir, dataset_len):
@@ -171,7 +174,12 @@ def create_stratified_folds(labels):
 def main(args):
 
     model_name = args.model_name
-    transform = get_transforms(model_name)
+    transform = get_transforms(
+        model_name,
+        image_mode=args.image_mode,
+        normalize_mean=args.normalize_mean,
+        normalize_std=args.normalize_std,
+    )
 
     # make sure encoding is always the same
 
@@ -202,7 +210,12 @@ def main(args):
         feature_extractor = get_models(model_name, saved_model_path=checkpoint)
         feature_dir = parent_dir / args.experiment_name / "features"
 
-        dataset = PathImageDataset(args.dataset_path, transform=transform, filetype=args.filetype)
+        dataset = PathImageDataset(
+            args.dataset_path,
+            transform=transform,
+            filetype=args.filetype,
+            image_mode=args.image_mode,
+        )
         dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
 
         save_features_and_labels(feature_extractor, dataloader, feature_dir, len(dataset))

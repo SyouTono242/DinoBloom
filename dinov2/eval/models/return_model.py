@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from dinov2.data.transforms import EnsureThreeChannels, make_normalize_transform
 from dinov2.utils.utils import torch_load_compat
 from models.ctran import ctranspath
 from models.resnet_retccl import resnet50 as retccl_res50
@@ -105,7 +106,7 @@ def get_full_res50():
     model = resnet.resnet50(weights="ResNet50_Weights.DEFAULT")
     return model
 
-def get_transforms(model_name):
+def get_transforms(model_name, image_mode="rgb", normalize_mean=None, normalize_std=None):
     # from imagenet, leave as is
     mean = (0.485, 0.456, 0.406)
     std = (0.229, 0.224, 0.225)
@@ -140,9 +141,19 @@ def get_transforms(model_name):
     else:
         raise ValueError("Model name not found")
 
+    if normalize_mean is not None:
+        mean = tuple(normalize_mean)
+    if normalize_std is not None:
+        std = tuple(normalize_std)
+
     size = (size, size)
 
-    transforms_list = [transforms.Resize(size), transforms.ToTensor(), transforms.Normalize(mean=mean, std=std)]
+    transforms_list = [transforms.Resize(size), transforms.ToTensor()]
+
+    if image_mode.lower() in {"gray", "grayscale", "l"}:
+        transforms_list.append(EnsureThreeChannels())
+
+    transforms_list.append(make_normalize_transform(mean=mean, std=std))
 
     if "beit_fb" in model_name.lower():
         transforms_list = [

@@ -35,7 +35,7 @@ def _parse_dataset_str(dataset_str: str):
 
     for token in tokens[1:]:
         key, value = token.split("=")
-        assert key in ("root", "extra", "split", "shuffle", "repeat", "image_ext")
+        assert key in ("root", "extra", "split", "shuffle", "repeat", "image_ext", "image_mode")
         if key in ("shuffle", "repeat"):
             value = bool(int(value))
         kwargs[key] = value
@@ -44,6 +44,8 @@ def _parse_dataset_str(dataset_str: str):
         class_ = HemaStandardDataset
     elif name == "WebDataset":
         class_ = WebDataset
+        if "repeat" not in kwargs:
+            kwargs["repeat"] = True
     else:
         raise ValueError(f'Unsupported dataset "{name}"')
 

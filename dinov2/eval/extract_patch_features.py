@@ -65,20 +65,24 @@ parser.add_argument(
     default=None,
     type=str,
 )
+parser.add_argument("--image_mode", default="rgb", type=str, help="rgb or grayscale")
+parser.add_argument("--normalize_mean", nargs="+", type=float, default=None, help="normalization mean values")
+parser.add_argument("--normalize_std", nargs="+", type=float, default=None, help="normalization std values")
 
 
 class CustomImageDataset(Dataset):
-    def __init__(self, images, transform):
+    def __init__(self, images, transform, image_mode="rgb"):
         self.transform = transform
         self.images = images
+        self.image_mode = image_mode.lower()
 
     def __len__(self):
         return len(self.images)
 
     def __getitem__(self, idx):
         image_path = self.images[idx]
-
-        image = Image.open(image_path).convert("RGB").resize((224, 224), Image.Resampling.LANCZOS)
+        pil_mode = "L" if self.image_mode in {"gray", "grayscale", "l"} else "RGB"
+        image = Image.open(image_path).convert(pil_mode).resize((224, 224), Image.Resampling.LANCZOS)
 
         if self.transform:
             image = self.transform(image)
@@ -86,8 +90,9 @@ class CustomImageDataset(Dataset):
 
 
 class wbc_mil_Dataset(Dataset):
-    def __init__(self, data_path, transform):
+    def __init__(self, data_path, transform, image_mode="rgb"):
         self.transform = transform
+        self.image_mode = image_mode.lower()
         self.images = []
 
         clses = os.listdir(data_path)
@@ -105,7 +110,8 @@ class wbc_mil_Dataset(Dataset):
 
     def __getitem__(self, idx):
         image_path = self.images[idx]
-        image = Image.open(image_path).convert("RGB")
+        pil_mode = "L" if self.image_mode in {"gray", "grayscale", "l"} else "RGB"
+        image = Image.open(image_path).convert(pil_mode)
 
         if self.transform:
             image = self.transform(image)
@@ -144,10 +150,15 @@ def main(args):
     train_image_paths = args.train_image_path
     test_image_paths = args.test_image_path
     model_name = args.model_name
-    transform = get_transforms(model_name)
+    transform = get_transforms(
+        model_name,
+        image_mode=args.image_mode,
+        normalize_mean=args.normalize_mean,
+        normalize_std=args.normalize_std,
+    )
 
-    train_dataset = wbc_mil_Dataset(transform=transform, data_path=train_image_paths)
-    test_dataset = wbc_mil_Dataset(transform=transform, data_path=test_image_paths)
+    train_dataset = wbc_mil_Dataset(transform=transform, data_path=train_image_paths, image_mode=args.image_mode)
+    test_dataset = wbc_mil_Dataset(transform=transform, data_path=test_image_paths, image_mode=args.image_mode)
 
     # Create data loaders for the three datasets
     train_dataloader = DataLoader(train_dataset, batch_size=256, shuffle=False, num_workers=16)
