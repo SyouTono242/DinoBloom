@@ -1,5 +1,17 @@
 MODEL:
   WEIGHTS: ''
+normalization:
+  mean:
+  - 0.485
+  - 0.456
+  - 0.406
+  std:
+  - 0.229
+  - 0.224
+  - 0.225
+randaugment:
+  num_ops: 2
+  magnitude: 5
 compute_precision:
   grad_scaler: true
   teacher:

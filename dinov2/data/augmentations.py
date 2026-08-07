@@ -365,3 +365,47 @@ class DataAugmentationMicroscopyGray(object):
         ]
         output["offsets"] = ()
         return output
+
+
+class DataAugmentationMicroscopyGrayRandAugment(DataAugmentationMicroscopyGray):
+    def __init__(
+        self,
+        global_crops_scale,
+        local_crops_scale,
+        local_crops_number,
+        global_crops_size=224,
+        local_crops_size=96,
+        normalize_mean=(0.5,),
+        normalize_std=(0.25,),
+        randaugment_num_ops=2,
+        randaugment_magnitude=5,
+    ):
+        super().__init__(
+            global_crops_scale,
+            local_crops_scale,
+            local_crops_number,
+            global_crops_size=global_crops_size,
+            local_crops_size=local_crops_size,
+            normalize_mean=normalize_mean,
+            normalize_std=normalize_std,
+        )
+
+        logger.info("Using grayscale RandAugment parameters:")
+        logger.info(f"randaugment_num_ops: {randaugment_num_ops}")
+        logger.info(f"randaugment_magnitude: {randaugment_magnitude}")
+
+        randaugment = transforms.RandAugment(
+            num_ops=randaugment_num_ops,
+            magnitude=randaugment_magnitude,
+            interpolation=transforms.InterpolationMode.BICUBIC,
+            fill=0,
+        )
+
+        intensity_jitter = transforms.RandomApply(
+            [transforms.ColorJitter(brightness=0.25, contrast=0.25)],
+            p=0.8,
+        )
+
+        self.global_transfo1 = transforms.Compose([randaugment, intensity_jitter, GaussianBlur(p=1.0), self.normalize])
+        self.global_transfo2 = transforms.Compose([randaugment, intensity_jitter, GaussianBlur(p=0.3), self.normalize])
+        self.local_transfo = transforms.Compose([randaugment, intensity_jitter, GaussianBlur(p=0.5), self.normalize])

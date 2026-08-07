@@ -19,6 +19,7 @@ from dinov2.data import (
     DataAugmentationDINO,
     DataAugmentationHEMA,
     DataAugmentationMicroscopyGray,
+    DataAugmentationMicroscopyGrayRandAugment,
     MaskingGenerator,
     SamplerType,
     collate_data_and_cast,
@@ -223,6 +224,18 @@ def do_train(cfg, model, resume=False):
             local_crops_size=cfg.crops.local_crops_size,
             normalize_mean=normalize_mean,
             normalize_std=normalize_std,
+        )
+    elif cfg.data_transform == "microscopy_gray_randaugment":
+        data_transform = DataAugmentationMicroscopyGrayRandAugment(
+            cfg.crops.global_crops_scale,
+            cfg.crops.local_crops_scale,
+            cfg.crops.local_crops_number,
+            global_crops_size=cfg.crops.global_crops_size,
+            local_crops_size=cfg.crops.local_crops_size,
+            normalize_mean=normalize_mean,
+            normalize_std=normalize_std,
+            randaugment_num_ops=cfg.randaugment.num_ops,
+            randaugment_magnitude=cfg.randaugment.magnitude,
         )
     else:
         raise ValueError(f"Unsupported data_transform: {cfg.data_transform}")
