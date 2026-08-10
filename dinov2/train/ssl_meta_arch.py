@@ -122,6 +122,27 @@ class SSLMetaArch(nn.Module):
                 f"(missing={len(missing_keys)}, unexpected={len(unexpected_keys)})"
             )
 
+        self.do_retain = cfg.retain.loss_weight > 0
+        self.retain_loss_weight = cfg.retain.loss_weight
+        if self.do_retain:
+            if not cfg.retain.reference_weights:
+                raise ValueError("retain.reference_weights must be set when retain.loss_weight > 0")
+            reference_backbone, reference_embed_dim = build_model_from_cfg(cfg, only_teacher=True)
+            if reference_embed_dim != embed_dim:
+                raise ValueError(
+                    f"Reference and student embedding dimensions differ: {reference_embed_dim} != {embed_dim}"
+                )
+            reference_checkpoint = torch_load_compat(cfg.retain.reference_weights, map_location="cpu")
+            reference_state = _extract_backbone_state_dict(reference_checkpoint)
+            reference_backbone.load_state_dict(reference_state, strict=True)
+            reference_backbone.requires_grad_(False)
+            reference_backbone.eval()
+            self.reference = nn.ModuleDict({"backbone": reference_backbone})
+            logger.info(
+                "OPTIONS -- retention loss -- "
+                f"weight: {self.retain_loss_weight}, reference: {cfg.retain.reference_weights}"
+            )
+
         self.embed_dim = embed_dim
         self.dino_out_dim = cfg.dino.head_n_prototypes
 
@@ -324,6 +345,24 @@ class SSLMetaArch(nn.Module):
         student_global_cls_tokens = student_global_backbone_output_dict["x_norm_clstoken"]
         inputs_for_student_head_list.append(student_global_cls_tokens.unsqueeze(0))
 
+        if self.do_retain:
+            with torch.no_grad():
+                reference_global_output_dict = self.reference.backbone(
+                    global_crops, masks=masks, is_training=True
+                )
+                reference_global_cls_tokens = reference_global_output_dict["x_norm_clstoken"]
+            retain_loss = 1.0 - nn.functional.cosine_similarity(
+                student_global_cls_tokens.float(),
+                reference_global_cls_tokens.float(),
+                dim=-1,
+                eps=1e-8,
+            ).mean()
+            weighted_retain_loss = self.retain_loss_weight * retain_loss
+            loss_accumulator += weighted_retain_loss
+            # Store only the weighted term so the training loop's summed total is correct.
+            loss_dict["retain_loss"] = weighted_retain_loss
+            reshard_fsdp_model(self.reference)
+
         # 1c: global crops patch tokens
         if do_ibot:
             _dim = student_global_backbone_output_dict["x_norm_clstoken"].shape[-1]
@@ -452,9 +491,12 @@ class SSLMetaArch(nn.Module):
             torch._foreach_mul_(teacher_param_list, m)
             torch._foreach_add_(teacher_param_list, student_param_list, alpha=1 - m)
 
-    def train(self):
-        super().train()
+    def train(self, mode=True):
+        super().train(mode)
         self.teacher.eval()
+        if self.do_retain:
+            self.reference.eval()
+        return self
 
     def get_maybe_fused_params_for_submodel(self, m):
         params_groups = get_params_groups_with_decay(
@@ -486,6 +528,11 @@ class SSLMetaArch(nn.Module):
             self.student[k] = get_fsdp_wrapper(student_model_cfg, modules_to_wrap={BlockChunk})(self.student[k])
             teacher_model_cfg = self.cfg.compute_precision.teacher[k]
             self.teacher[k] = get_fsdp_wrapper(teacher_model_cfg, modules_to_wrap={BlockChunk})(self.teacher[k])
+        if self.do_retain:
+            reference_model_cfg = self.cfg.compute_precision.teacher.backbone
+            self.reference["backbone"] = get_fsdp_wrapper(
+                reference_model_cfg, modules_to_wrap={BlockChunk}
+            )(self.reference["backbone"])
 
     @staticmethod
     def interpolate_pos_encoding(x, w, h):
