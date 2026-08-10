@@ -185,6 +185,11 @@ def do_train(cfg, model, resume=False):
         max_to_keep=checkpoint_max_to_keep,
     )
 
+    evaluation_milestones = {int(step) for step in cfg.evaluation.milestone_iterations}
+    if any(step <= 0 for step in evaluation_milestones):
+        raise ValueError("evaluation.milestone_iterations must contain positive completed-step counts")
+    logger.info(f"Evaluation milestones (completed steps): {sorted(evaluation_milestones)}")
+
     # setup data preprocessing
 
     img_size = cfg.crops.global_crops_size
@@ -383,7 +388,13 @@ def do_train(cfg, model, resume=False):
             batch_collection = []
             total_tokens_collected = 0
 
-        if cfg.evaluation.eval_period_iterations > 0 and (iteration + 1) % cfg.evaluation.eval_period_iterations == 0:
+        completed_steps = iteration + 1
+        is_periodic_evaluation = (
+            cfg.evaluation.eval_period_iterations > 0
+            and completed_steps % cfg.evaluation.eval_period_iterations == 0
+        )
+        is_milestone_evaluation = completed_steps in evaluation_milestones
+        if is_periodic_evaluation or is_milestone_evaluation:
             do_test(cfg, model, f"training_{iteration}")
             torch.cuda.synchronize()
         periodic_checkpointer.step(iteration)
